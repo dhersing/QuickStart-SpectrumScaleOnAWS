@@ -1,0 +1,347 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Step 1 of 2: This template deploys the AWS IBM Spectrum Scale Quick Start.",
+    "Metadata": {
+  	"AWS::CloudFormation::Interface" : {
+  		"ParameterGroups" : [
+  			{
+  			    "Label": { "default": "File System Configurations:" },
+  			    "Parameters": [ "FsName", "BlockSize", "DataReplica", "MetadataReplica", "GpfsMountPoint" ]
+  			},
+  			{
+  			    "Label": { "default": "NSD Configurations:" },
+  			    "Parameters": [ "EBSType", "DiskPerNode", "DiskSize" ]
+  			},
+  			{
+  			    "Label": { "default": "Server Node Configurations:" },
+  			    "Parameters": [ "ServerNodeCount", "ServerInstanceType"
+  			    ]
+  			},
+  			{
+  			    "Label": { "default": "Compute Node Configurations:" },
+  			    "Parameters": [ "ComputeNodeCount", "ComputeInstanceType" ]
+  			},
+  			{
+  				"Label": { "default" : "Network Configuration:" },
+  				"Parameters": [ "AvailabilityZone", "VpcId", "SubnetId" ]
+  			},
+  			{
+  				"Label": { "default" : "Security Configuration:" },
+  				"Parameters": [ "KeyName", "IAMRole", "RemoteAccessLocation" ]
+  			},
+  			{
+  				"Label": { "default" : "Other Configuration:" },
+  				"Parameters": [ "s3path", "ClusterName" ]
+  			}
+  		],
+  		"ParameterLabels" : { 
+		  	"FsName": {
+		       "default": "File System Name"
+		    },
+		    "BlockSize": {
+		       "default": "BlockSize"
+		    },
+		    "DataReplica": {
+		      "default": "Data replica"
+		     },
+		    "MetadataReplica": {
+		      "default": "Metadata replica"
+		    },
+		    "GpfsMountPoint": {
+		      "default": "GPFS Mount Point"
+		    },
+		    "EBSType": {
+		      "default": "EBS Type"
+		    },
+		    "DiskPerNode": {
+		      "default": "Disk Per Node"
+		    },
+		    "DiskSize": {
+		      "default": "Disk Size"
+		    },
+		    "ServerNodeCount": {
+		      "default": "Server Node Count"
+		    },
+		    "ServerInstanceType": {
+		      "default": "Server Instance Type"
+		    },
+		    "ComputeNodeCount": {
+		      "default": "Compute Node Count"
+		    },
+		    "ComputeInstanceType": {
+		      "default": "Compute Instance Type"
+		    },
+		    "AvailabilityZones": {
+		      "default": "Availability Zones"
+		    },
+		    "VpcId": {
+		      "default": "VPC Id"
+		    },
+		    "SubnetId": {
+		      "default": "Subnet Id"
+		    },
+		    "RemoteAccessLocation": {
+		      "default": "Allowed External Access CIDR"
+		    },
+		    "s3path": {
+		      "default": "S3 Path"
+		    },
+		    "KeyName": {
+		      "default": "Key Name"
+		    },
+		    "ClusterName": {
+		      "default": "Cluster Name"
+		    },
+		    "IAMRole" : {
+		      "default" : "IAM Role"
+		    }
+  		}
+  	}
+  },
+    "Parameters": {
+	    "FsName": {
+	      "Description": "File system name.",
+	      "Type": "String",
+	      "MinLength": "1",
+	      "Default": "fs1"
+	    },
+	    "BlockSize": {
+	      "Description": "File system block size",
+	      "Type": "String",
+	      "Default": "1M",
+	      "AllowedValues": [
+	         "64K", "128K", "256K", "512K", "1M", "2M", "4M", "8M", "16M"
+	      ]
+	    },
+	    "DataReplica": {
+	      "Description": "Data replica",
+	      "Type": "Number",
+	      "Default": "1",
+	      "MinValue": "1",
+	      "MaxValue": "3"
+	    },
+	    "MetadataReplica": {
+	      "Description": "Metadata replica",
+	      "Type": "Number",
+	      "Default": "1",
+	      "MinValue": "1",
+	      "MaxValue": "3"
+	    },
+	    "GpfsMountPoint": {
+	      "Description": "The Linux mount point for the GPFS volume",
+	      "Type": "String",
+	      "MinLength": "1",
+	      "Default": "/gfs/fs1"
+	    },
+	    "EBSType": {
+	      "Description": "EBS Type",
+	      "Type": "String",
+	      "Default": "gp2",
+	      "AllowedValues": [
+	        "standard",
+	        "gp2",
+	        "io1"
+	      ]
+	    },
+	    "DiskPerNode": {
+	      "Description": "This number of disks would be attached to only with nsd server nodes.",
+	      "Type": "Number",
+	      "MinValue": "1",
+	      "MaxValue": "10",
+	      "Default": "1"
+	    },
+	    "DiskSize": {
+	      "Description": "Disk size (size in GB and MAX supported size would be 10000 (10TB)",
+	      "Type": "Number",
+	      "Default": "5",
+	      "MinValue": "5",
+	      "MaxValue": "10000"
+	    },
+	    "ServerNodeCount": {
+	      "Description": "Number of EC2 instances to launch for NSD Server on GPFS cluster (Max<=64)",
+	      "Type": "Number",
+	      "Default": "1",
+	      "MinValue": "1",
+	      "MaxValue": "64"
+	    },
+	    "ServerInstanceType": {
+	      "Description": "Instance type to use for the NSD Server nodes instances",
+	      "Type": "String",
+	      "Default": "m4.large",
+	      "AllowedValues": [
+	        "m4.large",
+	        "m4.xlarge",
+	        "m4.2xlarge",
+	        "m4.4xlarge",
+	        "m4.10xlarge",
+	        "m4.16xlarge",
+	        "c4.large",
+	        "c4.xlarge",
+	        "c4.2xlarge",
+	        "c4.4xlarge",
+	        "c4.8xlarge",
+	        "c3.large",
+	        "c3.xlarge",
+	        "c3.2xlarge",
+	        "c3.4xlarge",
+	        "c3.8xlarge",
+	        "cc2.8xlarge"
+	      ],
+	      "ConstraintDescription": "must be a valid EC2 instance type."
+	    },
+	    "ComputeNodeCount": {
+	      "Default": "1",
+	      "Description": "Number of Compute node instances (MAX 64)",
+	      "Type": "Number",
+	      "MinValue": "0",
+	      "MaxValue": "64"
+	    },
+	    "ComputeInstanceType": {
+	      "Description": "Instance type to use for the Compute node instances",
+	      "Type": "String",
+	      "Default": "m4.large",
+	      "AllowedValues": [
+	        "m4.large",
+	        "m4.xlarge",
+	        "m4.2xlarge",
+	        "m4.4xlarge",
+	        "m4.10xlarge",
+	        "m4.16xlarge",
+	        "c4.large",
+	        "c4.xlarge",
+	        "c4.2xlarge",
+	        "c4.4xlarge",
+	        "c4.8xlarge",
+	        "c3.large",
+	        "c3.xlarge",
+	        "c3.2xlarge",
+	        "c3.4xlarge",
+	        "c3.8xlarge",
+	        "cc2.8xlarge"
+	      ],
+	      "ConstraintDescription": "must be a valid EC2 instance type."
+	    },
+    	"AvailabilityZone": {
+      		"Description": "List of Availability Zones to use for the subnets in the VPC.",
+      		"Default": "us-west-2b",
+      		"Type": "AWS::EC2::AvailabilityZone::Name"
+    	},
+	    "VpcId": {
+	      "AllowedPattern": "vpc-[a-z0-9]*",
+	      "ConstraintDescription": "can contain only alphanumeric characters, spaces, dashes and underscores.",
+	      "Default": "vpc-1efa597a",
+	      "Description": "Id of an exisiting VPC that contains a public subnet on same AZ as selected i.e. vpc-1efa597a",
+	      "MaxLength": "64",
+	      "MinLength": "1",
+	      "Type": "AWS::EC2::VPC::Id"
+	    },
+	    "SubnetId": {
+	      "AllowedPattern": "subnet-[a-z0-9]*",
+	      "Default": "subnet-dbf45abf",
+	      "ConstraintDescription": "can contain only alphanumeric characters, spaces, dashes and underscores.",
+	      "Description": "Comma separated list of VPC subnet IDs for the cluster deployment (e.g. subnet-4b8d329f,subnet-bd73afc8); VPC must exist with proper configuration for Confluent cluster access (internal and external)",
+          "Type": "AWS::EC2::Subnet::Id"
+	    },
+	    "RemoteAccessLocation": {
+	      "Description": "Lockdown RDP access to the bastion host (default can be accessed from anywhere)",
+	      "Type": "String",
+	      "Default": "0.0.0.0/0",
+	      "AllowedPattern": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})",
+	      "ConstraintDescription": "must be a valid CIDR range of the form x.x.x.x/x."
+	    },
+	    "s3path": {
+	      "Default": "ssprojects/gpfsaws/QuickStarts/ExistingVPC-SingalAZ",
+	      "Description": "Root Path for all s3 related Data",
+	      "Type": "String"
+	    },
+	    "KeyName": {
+	      "Description": "Name of an existing EC2 Key Pair",
+	      "Type": "AWS::EC2::KeyPair::KeyName",
+	      "Default": "dhersing-aws-key",
+	      "MinLength": "1",
+	      "ConstraintDescription": "must be the name of an existing EC2 KeyPair."
+	    },
+	    "ClusterName": {
+	      "Description": "The name of the gpfs cluster",
+	      "Type": "String",
+	      "MinLength": "1",
+	      "Default": "gpfsaws"
+	    },
+	    "IAMRole" : {
+	      "Description" : "Add existing role name (default will create new IAM role).",
+	      "Type": "String",
+	      "Default": "dhersing-pipline-role",
+	      "ConstraintDescription" : "Add existing role name if don't want to create new one (Optional)."
+	    }
+	},
+    "Resources": {
+        "InstanceStack": {
+            "Type": "AWS::CloudFormation::Stack",
+            "Properties": {
+                "TemplateURL": "https://s3-us-west-2.amazonaws.com/ssprojects/gpfsaws/QuickStarts/ExistingVPC-SingalAZ/quickstart-ibm-spectrumscale-SingalAZ-Stack.template",
+                "Parameters": {
+				    "FsName": {
+				        "Ref": "FsName"
+				    },
+				    "BlockSize": {
+				      	"Ref": "BlockSize"
+				    },
+				    "DataReplica": {
+				    	"Ref": "DataReplica"
+				    },
+				    "MetadataReplica": {
+				    	"Ref": "MetadataReplica"
+				    },
+				    "GpfsMountPoint": {
+				    	"Ref": "GpfsMountPoint"
+				    },
+				    "EBSType": {
+				    	"Ref": "EBSType"
+				    },
+				    "DiskPerNode": {
+				    	"Ref": "DiskPerNode"
+				    },
+				    "DiskSize": {
+				    	"Ref": "DiskSize"
+				    },
+				    "ServerNodeCount": {
+				    	"Ref": "ServerNodeCount"
+				    },
+				    "ServerInstanceType": {
+				    	"Ref": "ServerInstanceType"
+				    },
+				    "ComputeNodeCount": {
+				       "Ref": "ComputeNodeCount" 
+				     },
+				    "ComputeInstanceType": {
+				    	"Ref": "ComputeInstanceType"
+				    },
+				    "AvailabilityZone": {
+                        "Ref": "AvailabilityZone"
+                    },
+				    "SubnetId":{
+                         "Ref": "SubnetId"
+                    },
+                    "VpcId": {
+                        "Ref": "VpcId"
+                    },
+				    "RemoteAccessLocation": {
+				    	"Ref": "RemoteAccessLocation"
+				    },
+				    "s3path": {
+				    	"Ref": "s3path"
+				    },
+				    "KeyName": {
+				    	"Ref": "KeyName"
+				    },
+				    "ClusterName": {
+				    	"Ref": "ClusterName"
+				    },
+				    "IAMRole" : {
+				    	"Ref": "IAMRole"
+				    }
+				  }
+	            }
+        }
+    }
+}
