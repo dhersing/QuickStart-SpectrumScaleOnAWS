@@ -1,0 +1,13 @@
+{
+  "Parameters" : {
+    "DiskSize" : "50",
+    "DiskPerNode" : "2",
+    "ServerNodeCount" : "4",
+    "ServerInstanceType" : "m4.large",    
+    "ComputeNodeCount" : "2",
+    "KeyName" : "dhersing-aws-key",
+    "IAMRole" : "dhersing-pipline-role",
+    "VPCUrl" : "https://s3-us-west-2.amazonaws.com/ssprojects/gpfsaws/QuickStarts/NewVPC-SingalAZ/quickstart-ibm-spectrumscale-new-SingalAZ-VPC.template",
+    "ClusterUrl" : "https://s3-us-west-2.amazonaws.com/ssprojects/gpfsaws/QuickStarts/NewVPC-SingalAZ/quickstart-ibm-spectrumscale-new-SingalAZ-Cluster.template"
+  }
+}

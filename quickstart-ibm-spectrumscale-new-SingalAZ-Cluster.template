@@ -1,0 +1,1552 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Step 3 of 3: Create GPFS cluster and filesystem on aws environment.",
+  "Metadata": {
+  	"AWS::CloudFormation::Interface" : {
+  		"ParameterGroups" : [
+  			{
+  			    "Label": { "default": "File System Configurations:" },
+  			    "Parameters": [ "FsName", "BlockSize", "DataReplica", "MetadataReplica", "GpfsMountPoint" ]
+  			},
+  			{
+  			    "Label": { "default": "NSD Configurations:" },
+  			    "Parameters": [ "EBSType", "DiskPerNode", "DiskSize" ]
+  			},
+  			{
+  			    "Label": { "default": "Server Node Configurations:" },
+  			    "Parameters": [ "ServerNodeCount", "ServerInstanceType"
+  			    ]
+  			},
+  			{
+  			    "Label": { "default": "Compute Node Configurations:" },
+  			    "Parameters": [ "ComputeNodeCount", "ComputeInstanceType" ]
+  			},
+  			{
+  				"Label": { "default" : "Network Configuration:" },
+  				"Parameters": [ "AvailabilityZone", "VpcId", "SubnetId" ]
+  			},
+  			{
+  				"Label": { "default" : "Security Configuration:" },
+  				"Parameters": [ "KeyName", "IAMRole", "RemoteAccessLocation" ]
+  			},
+  			{
+  				"Label": { "default" : "Other Configuration:" },
+  				"Parameters": [ "s3path", "ClusterName" ]
+  			}
+  		],
+  		"ParameterLabels" : { 
+		  	"FsName": {
+		       "default": "File System Name"
+		    },
+		    "BlockSize": {
+		       "default": "BlockSize"
+		    },
+		    "DataReplica": {
+		      "default": "Data replica"
+		     },
+		    "MetadataReplica": {
+		      "default": "Metadata replica"
+		    },
+		    "GpfsMountPoint": {
+		      "default": "GPFS Mount Point"
+		    },
+		    "EBSType": {
+		      "default": "EBS Type"
+		    },
+		    "DiskPerNode": {
+		      "default": "Disk Per Node"
+		    },
+		    "DiskSize": {
+		      "default": "Disk Size"
+		    },
+		    "ServerNodeCount": {
+		      "default": "Server Node Count"
+		    },
+		    "ServerInstanceType": {
+		      "default": "Server Instance Type"
+		    },
+		    "ComputeNodeCount": {
+		      "default": "Compute Node Count"
+		    },
+		    "ComputeInstanceType": {
+		      "default": "Compute Instance Type"
+		    },
+		    "AvailabilityZones": {
+		      "default": "Availability Zones"
+		    },
+		    "VpcId": {
+		      "default": "VPC Id"
+		    },
+		    "SubnetId": {
+		      "default": "Subnet Id"
+		    },
+		    "RemoteAccessLocation": {
+		      "default": "Allowed External Access CIDR"
+		    },
+		    "s3path": {
+		      "default": "S3 Path"
+		    },
+		    "KeyName": {
+		      "default": "Key Name"
+		    },
+		    "ClusterName": {
+		      "default": "Cluster Name"
+		    },
+		    "IAMRole" : {
+		      "default" : "IAM Role"
+		    }
+  		}
+  	}
+  },
+  "Parameters": {
+    "FsName": {
+      "Description": "File system name.",
+      "Type": "String",
+      "MinLength": "1",
+      "Default": "fs1"
+    },
+    "BlockSize": {
+      "Description": "File system block size",
+      "Type": "String",
+      "Default": "1M",
+      "AllowedValues": [
+         "64K", "128K", "256K", "512K", "1M", "2M", "4M", "8M", "16M"
+      ]
+    },
+    "DataReplica": {
+      "Description": "Data replica",
+      "Type": "Number",
+      "Default": "1",
+      "MinValue": "1",
+      "MaxValue": "3"
+    },
+    "MetadataReplica": {
+      "Description": "Metadata replica",
+      "Type": "Number",
+      "Default": "1",
+      "MinValue": "1",
+      "MaxValue": "3"
+    },
+    "GpfsMountPoint": {
+      "Description": "The Linux mount point for the GPFS volume",
+      "Type": "String",
+      "MinLength": "1",
+      "Default": "/gfs/fs1"
+    },
+    "EBSType": {
+      "Description": "EBS Type",
+      "Type": "String",
+      "Default": "gp2",
+      "AllowedValues": [
+        "standard",
+        "gp2",
+        "io1"
+      ]
+    },
+    "DiskPerNode": {
+      "Description": "This number of disks would be attached to only with nsd server nodes.",
+      "Type": "Number",
+      "MinValue": "1",
+      "MaxValue": "10",
+      "Default": "1"
+    },
+    "DiskSize": {
+      "Description": "Disk size (size in GB and MAX supported size would be 10240 (10TB)",
+      "Type": "Number",
+      "Default": "5",
+      "MinValue": "5",
+      "MaxValue": "10240"
+    },
+    "ServerNodeCount": {
+      "Description": "Number of EC2 instances to launch for NSD Server on GPFS cluster (Max<=64)",
+      "Type": "Number",
+      "Default": "1",
+      "MinValue": "1",
+      "MaxValue": "64"
+    },
+    "ServerInstanceType": {
+      "Description": "Instance type to use for the NSD Server nodes instances",
+      "Type": "String",
+      "Default": "m4.large",
+      "AllowedValues": [
+        "m4.large",
+        "m4.xlarge",
+        "m4.2xlarge",
+        "m4.4xlarge",
+        "m4.10xlarge",
+        "m4.16xlarge",
+        "c4.large",
+        "c4.xlarge",
+        "c4.2xlarge",
+        "c4.4xlarge",
+        "c4.8xlarge",
+        "c3.large",
+        "c3.xlarge",
+        "c3.2xlarge",
+        "c3.4xlarge",
+        "c3.8xlarge",
+        "cc2.8xlarge"
+      ],
+      "ConstraintDescription": "must be a valid EC2 instance type."
+    },
+    "ComputeNodeCount": {
+      "Default": "1",
+      "Description": "Number of Compute node instances (MAX 64)",
+      "Type": "Number",
+      "MinValue": "0",
+      "MaxValue": "64"
+    },
+    "ComputeInstanceType": {
+      "Description": "Instance type to use for the Compute node instances",
+      "Type": "String",
+      "Default": "m4.large",
+      "AllowedValues": [
+        "m4.large",
+        "m4.xlarge",
+        "m4.2xlarge",
+        "m4.4xlarge",
+        "m4.10xlarge",
+        "m4.16xlarge",
+        "c4.large",
+        "c4.xlarge",
+        "c4.2xlarge",
+        "c4.4xlarge",
+        "c4.8xlarge",
+        "c3.large",
+        "c3.xlarge",
+        "c3.2xlarge",
+        "c3.4xlarge",
+        "c3.8xlarge",
+        "cc2.8xlarge"
+      ],
+      "ConstraintDescription": "must be a valid EC2 instance type."
+    },
+    "AvailabilityZone": {
+      "Description": "AZ region for the cluster",
+      "Type": "AWS::EC2::AvailabilityZone::Name",
+      "Default": "us-west-2b"
+    },
+    "VpcId": {
+      "AllowedPattern": "vpc-[a-z0-9]*",
+      "ConstraintDescription": "can contain only alphanumeric characters, spaces, dashes and underscores.",
+      "Default": "vpc-1efa597a",
+      "Description": "Id of an exisiting VPC that contains a public subnet on same AZ as selected i.e. vpc-1efa597a",
+      "MaxLength": "64",
+      "MinLength": "1",
+      "Type": "AWS::EC2::VPC::Id"
+    },
+    "SubnetId": {
+      "AllowedPattern": "subnet-[a-z0-9]*",
+      "ConstraintDescription": "can contain only alphanumeric characters, spaces, dashes and underscores.",
+      "Default": "subnet-dbf45abf",
+      "Description": "Id of an exisiting public VPC subnet on same AZ as selected i.e. subnet-dbf45abf",
+      "Type": "AWS::EC2::Subnet::Id"
+    },
+    "RemoteAccessLocation": {
+      "Description": "Lockdown RDP access to the bastion host (default can be accessed from anywhere)",
+      "Type": "String",
+      "Default": "0.0.0.0/0",
+      "AllowedPattern": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})",
+      "ConstraintDescription": "must be a valid CIDR range of the form x.x.x.x/x."
+    },
+    "s3path": {
+      "Default": "ssprojects/gpfsaws",
+      "Description": "Root Path for all s3 related Data",
+      "Type": "String"
+    },
+    "KeyName": {
+      "Description": "Name of an existing EC2 Key Pair",
+      "Type": "AWS::EC2::KeyPair::KeyName",
+      "MinLength": "1",
+      "ConstraintDescription": "must be the name of an existing EC2 KeyPair."
+    },
+    "ClusterName": {
+      "Description": "The name of the gpfs cluster",
+      "Type": "String",
+      "MinLength": "1",
+      "Default": "gpfsaws"
+    },
+    "IAMRole" : {
+      "Description" : "Add existing role name (default will create new IAM role).",
+      "Type": "String",
+      "Default": "new",
+      "ConstraintDescription" : "Add existing role name if don't want to create new one (Optional)."
+    }
+  },
+  "Mappings": {
+    "RegionMap" : {
+      "us-east-1"      : { "AMI" : "ami-e5ec6085"},
+      "us-west-1"      : { "AMI" : "ami-e5ec6085"},
+      "us-west-2"      : { "AMI" : "ami-e5ec6085"},
+      "eu-west-1"      : { "AMI" : "ami-e5ec6085"},
+      "sa-east-1"      : { "AMI" : "ami-e5ec6085"},
+      "ap-southeast-1" : { "AMI" : "ami-e5ec6085"},
+      "ap-southeast-2" : { "AMI" : "ami-e5ec6085"},
+      "ap-northeast-1" : { "AMI" : "ami-e5ec6085"}
+    }
+    
+  },
+  "Conditions" : {
+    "NewIAMRole" : {"Fn::Equals" : [{"Ref" : "IAMRole"}, "new"]}
+  },
+  "Resources": {
+    "GPFSPG": {
+      "Type": "AWS::EC2::PlacementGroup",
+      "Properties": {
+        "Strategy": "cluster"
+      }
+    },
+    "AdminNodeIAMRole": {
+      "Type": "AWS::IAM::Role",
+      "Condition": "NewIAMRole",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "ec2.amazonaws.com"
+                ]
+              },
+              "Action": [
+                "sts:AssumeRole"
+              ]
+            }
+          ]
+        },
+        "Path": "/",
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/AmazonEC2FullAccess",
+          "arn:aws:iam::aws:policy/AmazonSSMFullAccess",
+          "arn:aws:iam::aws:policy/CloudWatchFullAccess",
+          "arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforSSM",
+          "arn:aws:iam::aws:policy/AWSDirectoryServiceReadOnlyAccess",
+          "arn:aws:iam::aws:policy/AmazonS3FullAccess",
+          "arn:aws:iam::aws:policy/CodePipelineAccess"
+        ],
+        "Policies": [
+        
+          {
+            "PolicyName": "S3Access",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject"
+                  ],
+                  "Resource": "arn:aws:s3:::ssprojects/*"
+                }
+              ]
+            }
+          },
+          {
+            "PolicyName": "InstancePass",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "iam:PassRole"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "AdminNodeInstanceIAMRole":{
+    "Type": "AWS::IAM::InstanceProfile",
+    "Properties": {
+        "Fn::If" : [
+      			"NewIAMRole",
+      {
+      	"Path": "/",
+        "Roles": [
+          {
+            "Ref": "AdminNodeIAMRole"
+          }
+        ]
+       },
+       {
+       	"Path": "/",
+        "Roles": [
+          {
+            "Ref": "IAMRole"
+          }
+        ]
+       } 
+      ]}
+    },
+    "RemoteAccessSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Cluster: Enables RDP access via port 3389 from Bastion, all traffic from within the group",
+        "VpcId": {
+          "Ref": "VpcId"
+        },
+        "SecurityGroupIngress": [
+          
+          {
+            "IpProtocol": "tcp",
+            "FromPort": "3389",
+            "ToPort": "3389",
+            "CidrIp": {
+              "Ref": "RemoteAccessLocation"
+            }
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": "22",
+            "ToPort": "22",
+            "CidrIp": {
+              "Ref": "RemoteAccessLocation"
+            }
+          }
+        ],
+        "SecurityGroupEgress": [
+          
+          {
+            "IpProtocol": "-1",
+            "FromPort": "1",
+            "ToPort": "65535",
+            "CidrIp": "0.0.0.0/0"
+          }
+        ],
+        "Tags": [
+          
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "",
+                [
+                  {
+                    "Ref": "AWS::StackName"
+                  },
+                  " - Remote Access SG"
+                ]
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "ServerSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Cluster: Enables cluster nodes to talk within the group",
+        "VpcId": {
+          "Ref": "VpcId"
+        },
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "-1",
+            "FromPort": "0",
+            "ToPort": "65536",
+            "CidrIp": "0.0.0.0/0"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "",
+                [
+                  {
+                    "Ref": "AWS::StackName"
+                  },
+                  " - Server Cluster SG"
+                ]
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "ComputeSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Cluster: Enables cluster nodes to talk within the group",
+        "VpcId": {
+          "Ref": "VpcId"
+        },
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "-1",
+            "FromPort": "0",
+            "ToPort": "65536",
+            "CidrIp": "0.0.0.0/0"
+          }
+        ],
+        "Tags": [ 
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "",
+                [
+                  {
+                    "Ref": "AWS::StackName"
+                  },
+                  " - Compute Cluster SG"
+                ]
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "ServerSecurityGroupIngress": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "GroupId": {
+          "Ref": "ServerSecurityGroup"
+        },
+        "IpProtocol": "-1",
+        "FromPort": "0",
+        "ToPort": "65535",
+        "SourceSecurityGroupId": {
+          "Ref": "ComputeSecurityGroup"
+        }
+      }
+    },
+    "ComputeSecurityGroupIngress": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "GroupId": {
+          "Ref": "ComputeSecurityGroup"
+        },
+        "IpProtocol": "-1",
+        "FromPort": "0",
+        "ToPort": "65535",
+        "SourceSecurityGroupId": {
+          "Ref": "ServerSecurityGroup"
+        }
+      }
+    },
+    "ServerNodeLaunchConfig": {
+      "Type": "AWS::AutoScaling::LaunchConfiguration",
+      "Metadata": {
+        "AWS::CloudFormation::Init": {
+          "configSets": {
+            "default": [
+              "configure_base",
+              {
+                "ConfigSet": "configure_gpfs"
+              }
+            ],
+            "configure_gpfs": [
+              
+              "setup_gpfs"
+            ]
+          },
+          "configure_base": {
+            "packages": {},
+            "files": {},
+            "services": {
+              "sysvinit": {}
+            }
+          },
+          "setup_gpfs": {
+            "packages": {
+              "yum": {
+                "nfs-utils": []
+                
+              }
+            },
+            "files": {
+            "/usr/bin/gpfs-config-setup.sh": {
+            	"content": {
+            		"Fn::Join": [
+            		
+            		  "",
+            		  [
+            		  	"#!/bin/bash\n",
+            		  	"export JAVA_HOME=/usr\n",
+						"export EC2_HOME=/root/ec2-api-tools-1.7.5.1\n",
+						"export EC2_URL=https://ec2.",
+						{
+							"Ref": "AWS::Region"
+						},
+						".amazonaws.com\n",
+						"PATH=$PATH:$HOME/bin\n",
+						"export PATH=$PATH:/usr/lpp/mmfs/bin:$EC2_HOME/bin\n",
+						"export PATH\n",
+						"ClusterName=",
+	                      {
+	                      	"Ref": "ClusterName"
+	                      },
+	                      "\n",
+	                      "FsName=",
+	                      {
+	                        "Ref": "FsName"
+	                      },
+	                      "\n",
+	                      "GpfsMountPoint=",
+	                      {
+	                      	"Ref": "GpfsMountPoint"
+	                      },
+	                      "\n",
+	                      "ServerNodeCount=",
+	                      {
+	                        "Ref": "ServerNodeCount"
+	                      },
+	                      "\n",
+	                      "ComputeNodeCount=",
+	                      {
+	                        "Ref": "ComputeNodeCount"
+	                      },
+	                      "\n",
+	                      "DiskPerNode=",
+	                      {
+	                        "Ref": "DiskPerNode"
+	                      },
+	                      "\n",
+	                      "DiskSize=",
+	                      {
+	                        "Ref": "DiskSize"
+	                      },
+	                      "\n",
+	                      "EBSType=",
+	                      {
+	                        "Ref": "EBSType"
+	                      },
+	                      "\n",
+	                      "BlockSize=",
+	                      {
+	                        "Ref": "BlockSize"
+	                      },
+	                      "\n",
+	                      "DataReplica=",
+	                      {
+	                        "Ref": "DataReplica"
+	                      },
+	                      "\n",
+	                      "MetadataReplica=",
+	                      {
+	                        "Ref": "MetadataReplica"
+	                      },
+	                      "\n",
+	                      "AlertWaitHandle=",
+	                      {
+	                        "Ref": "AlertWaitHandle"
+	                      }
+						]
+            		]
+            	},      
+                "mode": "000755",
+                "owner": "root",
+                "group": "root" 
+             },
+            "/usr/bin/gpfs-server-setup.sh": {
+            	"content": {
+            		"Fn::Join": [
+            		
+            		  "",
+            		  [
+            		  	"#!/bin/bash\n",
+            		  	"export JAVA_HOME=/usr\n",
+						"export EC2_HOME=/root/ec2-api-tools-1.7.5.1\n",
+						"export EC2_URL=https://ec2.",
+						{
+							"Ref": "AWS::Region"
+						},
+						".amazonaws.com\n",
+						"PATH=$PATH:$HOME/bin\n",
+						"export PATH=$PATH:/usr/lpp/mmfs/bin:$EC2_HOME/bin\n",
+						"export PATH\n",
+						"\n",
+	                    "ServerNodeCount=",
+	                     {
+	                       "Ref": "ServerNodeCount"
+	                     },
+	                    "\n",
+	                    "ComputeNodeCount=",
+	                    {
+	                       "Ref": "ComputeNodeCount"
+	                    },
+	                    "\n",
+	                    "AlertWaitHandle=",
+	                    {
+	                    	"Ref": "AlertWaitHandle"
+	                    },
+	                    "\n",
+	                    "InstanceID=$(wget -q -O- http://instance-data/latest/meta-data/instance-id)\n",
+						"echo My instance ID $InstanceID\n",
+				        "SecurityGroups=$(wget -q -O- http://instance-data/latest/meta-data/security-groups)\n",
+						"echo Total security groups are $SecurityGroups\n",
+            		  	"IFS=' ' read -a FSArray <<< $SecurityGroups\n",
+						"echo Number of Security Group : ${#FSArray[@]}\n",
+            		  	"for((count=0;count<${#FSArray[@]};count++))\n",
+            		  	"do\n",
+            		  	"  echo SG Name:${FSArray[count]}\n",
+            		  	"  SGLen=`echo ${FSArray[count]}|grep 'Server' |awk '{print length}'`\n",
+						"  if [ $SGLen > 0 ]\n",
+						"  then\n",
+						"     ServerSG=${FSArray[count]}\n",
+						"  else\n",
+						"     ComputeSG=${FSArray[count]}\n",
+						"  fi\n",
+						"done\n",
+						"echo ServerSG:$ServerSG\n",
+						"echo ComputeSG:$ComputeSG\n",
+						"\n",
+						"if [ ServerNodeCount == 0 -a ComputeNodeCount == 0 ]\n",
+						"then\n",
+    					"  echo existing from here as no node found...\n",
+    					"  exit\n",
+						"fi\n",
+						"\n",
+						"ec2-describe-instances --filter instance.group-name=$ServerSG > /var/log/instance_server.out\n",
+						"ec2-describe-instances --filter instance.group-name=$ComputeSG > /var/log/instance_compute.out\n",
+						"SerNodeCount=$(cat /var/log/instance_server.out | grep $ServerSG | wc -l)\n",
+						"ComNodeCount=`expr $(cat /var/log/instance_compute.out | grep $ComputeSG | wc -l) - $SerNodeCount`\n",
+						"\n",
+						"TotalNodeCount=`expr $ServerNodeCount + $ComputeNodeCount`\n",
+						"echo We have $ComputeNodeCount Compute nodes and $ServerNodeCount Server nodes in cluster.\n",
+                        "\n",
+						"echo ServerNodeOnRG:$SerNodeCount\n",
+						"echo ComputeNodeOnRG:$ComNodeCount\n",
+                        "\n",
+						"echo SererNodeCount:$ServerNodeCount\n",
+						"echo ComputeNodeCount:$ComputeNodeCount\n",
+						"while [ $ComputeNodeCount != $ComNodeCount -a $ServerNodeCount != $SerNodeCount ]\n",
+						"do\n",
+						"  echo Not all server are ready. Waiting...\n",
+						"  sleep 10\n",
+						"  ec2-describe-instances --filter instance.group-name=$ServerSG > /var/log/instance_server.out\n",
+						"  ec2-describe-instances --filter instance.group-name=$ComputeSG > /var/log/instance_compute.out\n",
+						"  SerNodeCount=$(cat /var/log/instance_server.out | grep $ServerSG | wc -l)\n",
+						"  ComNodeCount=`expr $(cat /var/log/instance_compute.out | grep $ComputeSG | wc -l) - $SerNodeCount`\n",
+						"done\n",
+						"cat /var/log/instance_server.out | grep running | awk '{print $2}' | sort |  while read line\n",
+						"do\n",
+						"  if [ $InstanceID == $line ]\n",
+						"  then\n",
+    					"    echo This node is admin node.\n",
+    					"    break\n",
+						"  else\n",
+    					"    echo This node is non-admin node. Exit.\n",
+    					"    exit 1\n",
+						"  fi\n",		
+						"done\n",
+						"\n",
+						"if [ $? != 0 ];\n",
+						"then\n",
+  						"  exit\n",
+						"fi\n",
+						"if [ $ComputeNodeCount != $ComNodeCount -a $ServerNodeCount != $SerNodeCount ]\n",
+						"then\n", 
+						"  exit\n",
+						"fi\n",
+						"i=1\n",
+						"quorum=0\n",
+						"touch /var/log/nodeDescFile\n",
+						"touch /var/log/nodeFile\n",
+						"touch /var/log/addNodeFile\n",
+						"\n",
+						"hostname=`hostname -A`\n",
+						"\n",
+						"TotalNodesLen=`expr $ServerNodeCount + $ComputeNodeCount`\n",
+						"echo TotalNodesLen=$TotalNodesLen\n",
+						"no_quorum=0\n",
+						"\n",
+						"if [ $TotalNodesLen -lt 4 ]; then no_quorum=$TotalNodesLen\n",
+						"elif [ 4 -ge $TotalNodesLen -o  $TotalNodesLen -lt 10 ]; then no_quorum=3\n",
+						"elif [ 10 -ge $TotalNodesLen -o  $TotalNodesLen -lt 19 ]; then no_quorum=5\n",
+						"else no_quorum=7\n",
+						"fi\n",
+						"\n",
+						"quorum=$no_quorum\n",
+						"let quorum--\n",
+						"cat /var/log/instance_server.out | grep PRIV | awk '{print $3}' | while read line\n",
+						"do\n",
+						"  if [ $line == $hostname ]\n",
+						"  then\n",
+						"    echo $line:quorum-manager >> /var/log/nodeDescFile\n",
+						"    echo $line >> /var/log/nodeFile\n",
+						"    ec2-modify-instance-attribute --disable-api-termination true $InstanceID\n",
+				        "    ec2-modify-instance-attribute --instance-initiated-shutdown-behavior stop $InstanceID\n",
+						"  elif [ $quorum -gt 0 ]\n",
+						"  then\n",
+						"    echo $line:quorum >> /var/log/nodeDescFile\n",
+						"    echo $line >> /var/log/nodeFile\n",
+						"    ec2-modify-instance-attribute --disable-api-termination true $InstanceID\n",
+				        "    ec2-modify-instance-attribute --instance-initiated-shutdown-behavior stop $InstanceID\n",
+						"    let quorum--\n",
+						"  else\n",
+						"    echo $line >> /var/log/nodeDescFile\n",
+						"    echo $line >> /var/log/nodeFile\n",
+						"  fi\n",		
+						"done\n",
+						"echo Collected all nodes description info.\n",
+						"echo = GPFS Cluster node description file =\n",
+						"cat /var/log/nodeDescFile\n",
+						"echo = end =\n",
+						"\n",
+						"serverline=`cat /var/log/instance_server.out | grep PRIV | awk '{print $3}'`\n",
+						"IFS=' ' read -a SerArray <<< $serverline\n",
+						"matched=true\n",
+						"com_quorum=0\n",
+						"if [ $quorum -gt $ServerNodeCount ]\n",
+						"then\n",
+						"  com_quorum=`expr $quorum - $ServerNodeCount`\n",
+						"  echo Number of quorum node belong to server nodes:$ServerNodeCount\n",
+						"else\n",
+						"  echo Number of quorum node belong to server nodes:$quorum\n",
+						"fi\n",
+						"\n",
+						"echo Number of quorum node belong to compute nodes:$com_quorum\n",
+						"cat /var/log/instance_compute.out | grep PRIV | awk '{print $3}' | while read computeline\n",
+						"do\n",
+						"  for((count=0;count<${#SerArray[@]};count++))\n",
+						"  do\n",
+						"    if [ $computeline == ${SerArray[count]} ]\n", 
+						"    then\n",
+						"      matched=false\n",
+						"    fi\n",
+						"  done\n",
+						"  if $matched; then\n",
+						"    if [ $com_quorum -gt 0 ]\n",
+						"    then\n",
+						"      echo $computeline:quorum >> /var/log/nodeDescFile\n",
+						"      echo $computeline >> /var/log/nodeFile\n",
+						"      ec2-modify-instance-attribute --disable-api-termination true $InstanceID\n",
+				        "      ec2-modify-instance-attribute --instance-initiated-shutdown-behavior stop $InstanceID\n",
+						"      let com_quorum--\n",
+						"    else\n",
+						"      echo $computeline >> /var/log/addNodeFile\n",
+						"    fi\n",
+						"  fi\n",
+						"  matched=true\n",	
+						"done\n",
+						"echo Collected all add nodes file info.\n",
+						"echo = GPFS Cluster node description file =\n",
+						"cat /var/log/nodeDescFile\n",
+						"echo = end =\n",
+						"\n",
+						"echo = GPFS Cluster node file =\n",
+						"cat /var/log/nodeFile\n",
+						"echo = end =\n",
+						"\n",
+						"echo = GPFS Cluster compute node description file =\n",
+						"cat /var/log/addNodeFile\n",
+						"echo = end =\n",
+						"echo Successfully Completed..\n"
+            		  ]
+            		]
+            	},      
+                "mode": "000755",
+                "owner": "root",
+                "group": "root" 
+             },
+            "/usr/bin/gpfs-nsd-setup.sh": {
+            	"content": {
+            	   "Fn::Join": [
+            	   
+            	   		"",
+            	   	  [
+            	   		"#!/bin/bash\n",
+            	   		"export JAVA_HOME=/usr\n",
+						"export EC2_HOME=/root/ec2-api-tools-1.7.5.1\n",
+						"export EC2_URL=https://ec2.",
+						{
+							"Ref": "AWS::Region"
+						},
+						".amazonaws.com\n",
+						"PATH=$PATH:$HOME/bin\n",
+						"export PATH=$PATH:/usr/lpp/mmfs/bin:$EC2_HOME/bin\n",
+						"export PATH\n",
+            	   		"EBSType=",
+            	   		{
+            	   			"Ref": "EBSType"
+            	   		},
+            	   		"\n",
+						"echo EBSType $EBSType\n",
+						"DiskPerNode=",
+						{
+							"Ref": "DiskPerNode"
+						},
+						"\n",
+						"echo DiskPerNode $DiskPerNode\n",
+						"DiskSize=",
+						{
+							"Ref": "DiskSize"
+						},
+						"\n",
+						"echo Generate GPFS cluster node file\n",
+						"rm /var/log/nsdFile\n",
+						"touch /var/nsdFile\n",
+						"echo DiskSize $DiskSize GB\n",
+            	   		"MyAZ=$(wget -q -O - http://instance-data/latest/meta-data/placement/availability-zone)\n",
+						"echo My available zone $MyAZ\n",
+						"compInstance=`cat /var/log/instance_compute.out | grep running | awk '{print $2}' | sort`\n",
+						"IFS=' ' read -a CInsArray <<< $compInstance\n",
+						"counter=${#CInsArray[@]}\n",
+						"echo Total Number of Nodes : $counter\n",
+						"success=true\n",
+						"IOPS=100\n",
+						"Instances=`cat /var/log/instance_server.out | grep INSTANCE | awk '{print $2}' | sort`\n",
+						"echo Instances : $Instances\n",
+						"IFS=' ' read -a InsArray <<< $Instances\n",
+						"echo Instances: ${InsArray[@]}\n",
+						"ServerPriDNS=`cat /var/log/instance_server.out | grep PRIV | awk '{print $3}' | sort`\n",
+						"IFS=' ' read -a ServerPriDNSArray <<< $ServerPriDNS\n",
+						"echo Create and Attach Disks with server nodes\n",
+						"DeviceName=({b..z})\n",
+						"j=1\n",
+						"echo No of Server nodes:${#ServerPriDNSArray[@]}\n",
+						"for((counter=0;counter<${#ServerPriDNSArray[@]};counter++))\n",
+						"do\n",
+						"   for((i=0;i<$DiskPerNode;i++))\n",
+						"   do\n",
+						"      echo Create the $i disk, size $DiskSize GB\n",
+						"      if [ $EBSType == 'io1' ]\n",
+						"      then\n",
+						"         echo Calculating IOPS for io1 type\n",
+						"         IOPS=$(expr $DiskSize \\* 50)\n",
+						"         ec2-create-volume -s $DiskSize -i $IOPS -t $EBSType -z $MyAZ > /var/log/nsd.out\n",
+						"      else\n",
+						"         ec2-create-volume -s $DiskSize -t $EBSType -z $MyAZ > /var/log/nsd.out\n",
+						"      fi\n",
+						"      volID=$(cat /var/log/nsd.out | grep 'vol-' | awk '{print $2}')\n",
+                        "      echo Volume $volID has been created\n",
+						"      sleep 10\n",
+						"      volStatus=$(ec2-describe-volume-status $volID | grep ok | wc -l)\n",
+						"      while [ $volStatus -ne 1 ]\n",
+						"      do\n",
+						"         sleep 10\n",
+					    "         volStatus=$(ec2-describe-volume-status $volID | grep ok | wc -l)\n",
+						"      done\n",
+						"      echo Attach volume $volID to instance ${InsArray[counter]} as device /dev/xvd${DeviceName[i]}\n",
+						"      ec2-attach-volume $volID -i ${InsArray[counter]} -d /dev/xvd${DeviceName[i]}\n",
+						"      sleep 10\n",
+						"      attachStatus=$(ec2-describe-volumes | grep $volID | grep attached | wc -l)\n",
+						"      while [ $volStatus -ne 1 ]\n",
+						"      do\n",
+						"         sleep 10\n",
+						"         attachStatus=$(ec2-describe-volumes | grep $volID | grep attached | wc -l)\n",
+						"      done\n",
+						"      # Commenting out for now ###\n",
+						"      # ec2-modify-instance-attribute --block-device-mapping /dev/xvd${DeviceName[i]}=$volID ${InsArray[counter]}\n",
+						"      echo creating nsd file\n",
+						"      { echo %nsd:nsd=nsd_${j}_$i; \n",
+						"        echo device=/dev/xvd${DeviceName[$i]}; \n",
+						"        echo servers=${ServerPriDNSArray[counter]}; \n", 
+						"        echo usage=dataAndMetadata; \n",
+						"        echo failureGroup=$j; \n",
+						"        echo pool=system; \n",
+						"        echo ' '; } >> /var/log/nsdFile\n",
+						"   done\n",
+						"   let j++\n",
+					    "done\n",
+					    "echo = GPFS NSD description file =\n",
+						"cat /var/log/nsdFile\n",
+						"echo = end =\n"	
+            	   	]
+            	   ]
+            	},
+                "mode": "000755",
+                "owner": "root",
+                "group": "root"
+             },
+            "/usr/bin/gpfs-cluster-setup.sh": {
+            	"content": {
+            	   "Fn::Join": [
+            	   
+            	   		"",
+            	   	  [
+            	   		"#!/bin/bash\n",
+            	   		"export JAVA_HOME=/usr\n",
+						"export EC2_HOME=/root/ec2-api-tools-1.7.5.1\n",
+						"export EC2_URL=https://ec2.",
+						{
+							"Ref": "AWS::Region"
+						},
+						".amazonaws.com\n",
+						"PATH=$PATH:$HOME/bin\n",
+						"export PATH=$PATH:/usr/lpp/mmfs/bin:$EC2_HOME/bin\n",
+						"export PATH\n",
+            	   		"BlockSize=",
+            	   		{
+            	   			"Ref": "BlockSize"
+            	   		},
+            	   		"\n",
+						"echo BlockSize $BlockSize\n",
+						"DataReplica=",
+						{
+							"Ref": "DataReplica"
+						},
+						"\n",
+						"echo DataReplica $DataReplica\n",
+						"MetadataReplica=",
+						{
+							"Ref": "MetadataReplica"
+						},
+						"\n",
+						"echo MetadataReplica $MetadataReplica\n",
+						"FsName=",
+						{
+							"Ref": "FsName"
+						},
+						"\n",
+						"echo FsName $FsName\n",
+						"GpfsMountPoint=",
+						{
+							"Ref": "GpfsMountPoint"
+						},
+						"\n",
+						"echo GpfsMountPoint $GpfsMountPoint\n",
+						"ClusterName=",
+						{
+							"Ref": "ClusterName"
+						},
+						"\n",
+						"echo ClusterName $ClusterName\n",
+						"InstanceID=$(wget -q -O- http://instance-data/latest/meta-data/instance-id)\n",
+						"echo My instance ID $InstanceID\n",
+            	   		"cat /var/log/instance_server.out | grep running | awk '{print $2}' | sort |  while read line\n",
+						"do\n",
+						"  if [ $InstanceID == $line ]\n",
+						"  then\n",
+    					"    echo This node is admin node.\n",
+    					"    break\n",
+						"  else\n",
+    					"    echo This node is non-admin node. Exit.\n",
+    					"    exit 1\n",
+						"  fi\n",		
+						"done\n",
+						"\n",
+						"if [ $? != 0 ];\n",
+						"then\n",
+  						"  exit\n",
+						"fi\n",
+						"echo Create GPFS cluster\n",
+						"/usr/lpp/mmfs/bin/mmcrcluster -N /var/log/nodeDescFile --ccr-enable -C $ClusterName -r /usr/bin/ssh -R /usr/bin/scp -A\n",
+						"echo Assigning server license.. \n",
+						"/usr/lpp/mmfs/bin/mmchlicense server --accept -N /var/log/nodeFile\n",
+						"echo Create GPFS NSD..\n",
+						"/usr/lpp/mmfs/bin/mmcrnsd -F /var/log/nsdFile\n",
+						"echo Start gpfs cluster..\n",
+						"/usr/lpp/mmfs/bin/mmstartup -a\n",
+						"sleep 10\n",
+						"echo Waiting for all nodes to be in active mode....\n",
+						"ActiveNode=$(/usr/lpp/mmfs/bin/mmgetstate -a | grep active | wc -l)\n",
+						"NoOfSerNodes=`cat /var/log/nodeFile | wc -l`\n",
+						"echo NoOfSerNodes=$NoOfSerNodes\n",
+						"echo ActiveNode=$ActiveNode\n",
+						"while [ $ActiveNode != $NoOfSerNodes ]\n",
+						"do\n",
+						"   sleep 10\n",
+						"   ActiveNode=$(/usr/lpp/mmfs/bin/mmgetstate -a | grep active | wc -l)\n",
+						"done\n",
+						"echo Checking state\n",
+						"/usr/lpp/mmfs/bin/mmgetstate -a\n",
+						"echo ---Successfully Completed---\n"
+            	   	   	]
+            	   ]
+            	},
+                "mode": "000755",
+                "owner": "root",
+                "group": "root"
+             },
+            "/usr/bin/gpfs-filesystem-setup.sh": {
+            	"content": {
+            		"Fn::Join": [
+
+              		"",
+              		[
+              		   "#!/bin/bash\n",
+            	   	   "export JAVA_HOME=/usr\n",
+					   "export EC2_HOME=/root/ec2-api-tools-1.7.5.1\n",
+					   "export EC2_URL=https://ec2.",
+					   {
+					      "Ref": "AWS::Region"
+					   },
+					   ".amazonaws.com\n",
+					   "PATH=$PATH:$HOME/bin\n",
+					   "export PATH=$PATH:/usr/lpp/mmfs/bin:$EC2_HOME/bin\n",
+					   "export PATH\n",
+              		   "\n",
+              		   "ServerNodeCount=",
+	                   {
+	                      "Ref": "ServerNodeCount"
+	                   },
+	                   "\n",
+	                   "ComputeNodeCount=",
+	                   {
+	                      "Ref": "ComputeNodeCount"
+	                   },
+	                   "\n",
+              		   "echo shutdown gpfs..\n",
+              		   "/usr/lpp/mmfs/bin/mmshutdown -a\n",
+              		   "/usr/lpp/mmfs/bin/mmchconfig maxblocksize=",
+              		   {
+					   		"Ref": "BlockSize"
+					   },
+					   "\n",
+              		   "sleep 10\n",
+              		   "/usr/lpp/mmfs/bin/mmlsconfig\n",
+              		   "/usr/lpp/mmfs/bin/mmstartup -a\n",
+              		   "echo Waiting for all nodes to be in active mode....\n",
+					   "ActiveNode=$(/usr/lpp/mmfs/bin/mmgetstate -a | grep active | wc -l)\n",
+						   "TotalNodesLen=`expr $ServerNodeCount + $ComputeNodeCount`\n",
+					   "echo TotalNodesLen=$TotalNodesLen\n",
+					   "echo ActiveNode=$ActiveNode\n",
+					   "while [ $ActiveNode != $TotalNodesLen ]\n",
+					   "do\n",
+					   "   sleep 10\n",
+					   "   ActiveNode=$(/usr/lpp/mmfs/bin/mmgetstate -a | grep active | wc -l)\n",
+					   "   echo TotalNodesLen=$TotalNodesLen\n",
+					   "   echo ActiveNode=$ActiveNode\n",
+					   "done\n",
+					   "echo Checking state\n",
+					   "/usr/lpp/mmfs/bin/mmgetstate -a\n",
+					   "echo Creating GPFS file system\n",
+					   "/usr/lpp/mmfs/bin/mmcrfs ",
+					   {
+					   		"Ref": "FsName"
+					   },
+					   " -F /var/log/nsdFile -B ",
+					   {
+					   		"Ref": "BlockSize"
+					   },
+					   " -R 3 -M 3 -r ",
+					   {
+					   		"Ref": "DataReplica"
+					   },
+					   " -m ",
+					   {
+					   		"Ref": "MetadataReplica"
+					   },
+					   " -T ",
+					   {
+					   		"Ref": "GpfsMountPoint"
+					   },
+					   "\n",
+					   "echo ----Sucussfully completed----\n"
+              		]
+              	  ]
+            	},
+                "mode": "000755",
+                "owner": "root",
+                "group": "root"
+             } 
+            },
+            "commands": {
+              "01_pre_setup_gpfs": {
+                "command": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "\n",
+                      "/usr/lpp/mmfs/bin/mmbuildgpl\n",
+                      "echo 'export PATH=$PATH:/usr/lpp/mmfs/bin/' > /etc/profile.d/gpfs.sh\n",
+                      "sed -i 's/#   StrictHostKeyChecking ask/StrictHostKeyChecking no/' /etc/ssh/ssh_config\n",
+                      "mkdir /var/log/gpfs",
+	                  "\n"
+	                ]
+                  ]
+                }
+              },
+              "02_setup_gpfs":{
+              	"command": "/usr/bin/gpfs-server-setup.sh >> /var/log/gpfs/gpfs-server-setup.log 2>&1"
+              },
+              "03_create_nsd": {
+                "command": "/usr/bin/gpfs-nsd-setup.sh >> /var/log/gpfs/gpfs-nsd-setup.log 2>&1"
+              },
+              "04_create_gpfs": {
+                "command": "/usr/bin/gpfs-cluster-setup.sh >> /var/log/gpfs/gpfs-cluster-setup.log 2>&1"
+              },
+              "05_add_compute_nodes": {
+                "command": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "\n",
+                      "/usr/lpp/mmfs/bin/mmaddnode -N /var/log/addNodeFile",
+                      "\n",
+					  "/usr/lpp/mmfs/bin/mmchlicense client --accept -N /var/log/addNodeFile",
+					  "\n",
+					  "/usr/lpp/mmfs/bin/mmstartup -N /var/log/addNodeFile",
+					  "\n",
+					  "sleep 100",
+					  "\n",
+					  "/usr/lpp/mmfs/bin/mmgetstate -a",
+					  "\n",
+					  "echo Successfully added nodes into cluster.",
+                      "\n"
+                    ]
+                  ]
+                }
+              },
+              "06_create_filesystem": { 
+                "command": "/usr/bin/gpfs-filesystem-setup.sh >> /var/log/gpfs/gpfs-filesystem-setup.log 2>&1"
+              },
+              "07_mount_gpfs": {
+                "command": {
+                  "Fn::Join": [
+                    
+                    "",
+                    [
+                      "/usr/lpp/mmfs/bin/mmmount ",
+                      {
+                      	"Ref": "FsName"
+                      },
+                      " -N /var/log/nodeFile\n",
+                      "chmod 777 ",
+                      {
+                        "Ref": "GpfsMountPoint"
+                      },
+                      "\n",
+                	  "\n",
+        	          "cfn-signal -e 0 -r 'Configuration failed.' '",
+        	          {
+          		         "Ref": "AlertWaitHandle"
+        	          },
+                      "'\n"
+                    ]
+                  ]
+                }
+              }
+           } 
+        }
+        }
+      },
+      "Properties": {
+        "ImageId" : { "Fn::FindInMap" : [ "RegionMap", { "Ref" : "AWS::Region" }, "AMI" ]},
+        "InstanceType": {
+          "Ref": "ServerInstanceType"
+        },
+        "IamInstanceProfile": {
+          "Ref": "AdminNodeInstanceIAMRole"
+        },
+        "InstanceMonitoring": "false",
+        "AssociatePublicIpAddress": "true",
+        "KeyName": {
+          "Ref": "KeyName"
+        },
+        "BlockDeviceMappings": [
+          {
+            "DeviceName": "/dev/sda1",
+            "Ebs": {
+              "VolumeSize": 40,
+              "VolumeType": "gp2"
+            }
+          }
+        ],
+        "SecurityGroups": [
+          { 
+            "Ref": "ServerSecurityGroup"
+          },
+          { 
+            "Ref": "ComputeSecurityGroup"
+          },
+          {
+          	"Ref": "RemoteAccessSecurityGroup"
+          }
+        ],
+        "UserData": {
+          "Fn::Base64": {
+            "Fn::Join": [
+              "",
+              [
+                "#!/bin/bash -x\n",
+                "yum -y install nfs-utils\n",
+                "\n",
+	            "cfn-init -s ",
+                {
+                  "Ref": "AWS::StackName"
+                },
+                " -r ServerNodeLaunchConfig ",
+                "   --region ",
+                {
+                  "Ref": "AWS::Region"
+                }
+              ]
+            ]
+          }
+        }
+      }
+    },
+    "ServerNodes": {
+      "Type": "AWS::AutoScaling::AutoScalingGroup",
+      "Properties": {
+        "PlacementGroup": {
+          "Ref": "GPFSPG"
+        },
+        "AvailabilityZones": [
+          {
+            "Ref": "AvailabilityZone"
+          }
+        ],
+        "DesiredCapacity": {
+        	"Ref": "ServerNodeCount"
+        },
+        "LaunchConfigurationName": {
+          "Ref": "ServerNodeLaunchConfig"
+        },
+        "MaxSize": "64",
+        "MinSize": "0",
+        "VPCZoneIdentifier": [
+          {
+            "Ref": "SubnetId"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "PropagateAtLaunch": "true",
+            "Value": {
+              "Fn::Join": [
+                "",
+                [
+                  {
+                    "Ref": "AWS::StackName"
+                  },
+                  " - ServerNode"
+                ]
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "ComputeNodeLaunchConfig": {
+      "Type": "AWS::AutoScaling::LaunchConfiguration",
+      "Metadata": {
+        "AWS::CloudFormation::Init": {
+          "configSets": {
+            "default": [
+              "configure_base",
+              {
+                "ConfigSet": "configure_gpfs"
+              }
+            ],
+            "configure_gpfs": [
+              
+              "setup_gpfs"
+            ]
+          },
+          "configure_base": {
+            "packages": {},
+            "files": {},
+            "services": {
+              "sysvinit": {}
+            }
+          },
+          "setup_gpfs": {
+            "packages": {
+              "yum": {
+                "nfs-utils": []
+              }
+            },
+            "files": {
+            "/etc/gpfsaws.conf": {
+                "content": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "Welcome to use Spectrum Scale on AWS\n",
+                      "[GPFS]\n", 
+                      "ComputeNodeCount:",
+                      {
+                        "Ref": "ComputeNodeCount"
+                      },
+                      "\n",
+                      "ServerNodeCount:",
+                      {
+                        "Ref": "ServerNodeCount"
+                      },
+                      "\n",
+                      "ClusterName:",
+                      {
+                      	"Ref": "ClusterName"
+                      },
+                      "\n",
+                      "FsName:",
+                      {
+                      	"Ref": "FsName"
+                      },
+                      "\n",
+                      "GpfsMountPoint:",
+                      {
+                      	"Ref": "GpfsMountPoint"
+                      },
+                      "\n"
+                    ]
+                  ]
+                },
+                "mode": "000655",
+                "owner": "root",
+                "group": "root"
+              }
+            },
+            "commands": {
+              "01-pre-req-setup": {
+                "command": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "\n",
+                      "/usr/lpp/mmfs/bin/mmbuildgpl\n",
+                      "echo 'export PATH=$PATH:/usr/lpp/mmfs/bin/' > /etc/profile.d/gpfs.sh\n",
+                      "#/usr/bin/dynamodb-insert.sh HPCTable > /var/log/dynamicdb-insert.log 2>&1",
+                	  "\n",
+                      "sed -i 's/#   StrictHostKeyChecking ask/StrictHostKeyChecking no/' /etc/ssh/ssh_config\n",
+                      "\n",
+                      "mkdir /var/log/gpfs",
+                      "\n",
+                      "aws s3 cp s3://",
+	                  {
+	                	"Ref": "s3path"
+	                  },
+	                  "/gpfs-script-compute-setup.sh  /usr/bin/",
+	                  "\n",
+	                  "chmod 755 /usr/bin/gpfs-script-compute-setup.sh",
+	                  "\n"
+                    ]
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "Properties": {
+      	"ImageId" : { "Fn::FindInMap" : [ "RegionMap", { "Ref" : "AWS::Region" }, "AMI" ]},
+        "InstanceType": {
+          "Ref": "ComputeInstanceType"
+        },
+        "IamInstanceProfile": {
+          "Ref": "AdminNodeInstanceIAMRole"
+        },
+        "InstanceMonitoring": "false",
+        "KeyName": {
+          "Ref": "KeyName"
+        },
+        "BlockDeviceMappings": [
+          {
+            "DeviceName": "/dev/sda1",
+            "Ebs": {
+              "VolumeSize": 20,
+              "VolumeType": "gp2"
+            }
+          }
+        ],
+        "SecurityGroups": [
+          {
+            "Ref": "ComputeSecurityGroup"
+          },
+          {
+          	"Ref": "RemoteAccessSecurityGroup"
+          }
+        ],
+        "UserData": {
+          "Fn::Base64": {
+            "Fn::Join": [
+              "",
+              [
+                "#!/bin/bash -x\n",
+                "yum -y install nfs-utils\n",
+                "\n",
+        		"cfn-init -s ",
+                {
+                  "Ref": "AWS::StackName"
+                },
+                " -r ComputeNodeLaunchConfig ",
+                "   --region ",
+                {
+                  "Ref": "AWS::Region"
+                }
+               ]
+            ]
+          }
+        }
+      }
+    },
+    "ComputeNodes": {
+      "Type": "AWS::AutoScaling::AutoScalingGroup",
+      "Properties": {
+        "PlacementGroup": {
+          "Ref": "GPFSPG"
+        },
+        "AvailabilityZones": [
+          {
+            "Ref": "AvailabilityZone"
+          }
+        ],
+        "DesiredCapacity": {
+          "Ref": "ComputeNodeCount"
+        },
+        "LaunchConfigurationName": {
+          "Ref": "ComputeNodeLaunchConfig"
+        },
+        "MaxSize": "64",
+        "MinSize": "0",
+        "VPCZoneIdentifier": [
+          {
+            "Ref": "SubnetId"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "PropagateAtLaunch": "true",
+            "Value": {
+              "Fn::Join": [
+                "",
+                [
+                  {
+                    "Ref": "AWS::StackName"
+                  },
+                  " - ComputeNode"
+                ]
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "AlertWaitCondition": {
+      "DependsOn": [
+        
+        "ServerNodes"
+      ],
+      "Properties": {
+        "Count": {
+        	"Ref": "ServerNodeCount"
+        },
+        "Handle": {
+          "Ref": "AlertWaitHandle"
+        },
+        "Timeout": "18000"
+      },
+      "Type": "AWS::CloudFormation::WaitCondition"
+    },
+    "AlertWaitHandle": {
+      "Properties": {},
+      "Type": "AWS::CloudFormation::WaitConditionHandle"
+     }
+  },
+  "Outputs": {
+    "StackName": {
+      "Value": {
+        "Ref": "AWS::StackName"
+      }
+    },
+    "AdminNodeInstanceIAMRoleid": {
+      "Value": {
+        "Ref": "AdminNodeInstanceIAMRole"
+      }
+    }
+  }
+}

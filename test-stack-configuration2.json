@@ -1,0 +1,14 @@
+{
+  "Parameters" : {
+    "DiskSize" : "50",
+    "DiskPerNode" : "1",
+    "ServerNodeCount" : "2",
+    "ServerInstanceType" : "m4.large",    
+    "ComputeNodeCount" : "2",
+    "KeyName" : "dhersing-aws-key",
+    "IAMRole" : "dhersing-pipline-role",
+    "SubnetId" : "subnet-dbf45abf",
+    "AvailabilityZone": "us-west-2b",
+    "VpcId": "vpc-1efa597a"
+   }
+}
